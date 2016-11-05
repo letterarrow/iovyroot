@@ -12,6 +12,13 @@
 
 #include <sys/resource.h>
 
+#include <sys/socket.h>
+#define F_SETPIPE_SZ (F_LINUX_SPECIFIC_BASE + 7)
+struct mmsghdr {
+	struct msghdr msg_hdr;
+	unsigned int msg_len;
+};
+
 #include "getroot.h"
 #include "sidtab.h"
 #include "policydb.h"

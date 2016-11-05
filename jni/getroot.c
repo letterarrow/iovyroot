@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <inttypes.h>
 
+#include <errno.h>
+
 #include "threadinfo.h"
 #include "sid.h"
 #include "getroot.h"

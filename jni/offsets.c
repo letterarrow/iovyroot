@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <inttypes.h>
 
+#include <errno.h>
+
 #include "offsets.h"
 
 #define ARRAYELEMS(a) (sizeof(a) / sizeof(a[0]))
@@ -413,6 +415,11 @@ struct offsets offsets[] = {
 	{ "T1-701u", "Linux version 3.10.17-g9935c48 (jslave@wuheatculx00118) (gcc version 4.7 (GCC) ) #0 SMP PREEMPT Fri Jan 8 16:34:04 CST 2016",
 	  { (void*)FSYNC_OFFSET(0xc088e530) },
 	  (void*)0xc088c65c, (void*)0xc088c54c, (void*)0xc07fb304, (void*)0xc088aaf8 },
+	/********************** SHARP **********************/
+	//AQUOS PHONE SHL22, 4.2.2 01.00.08
+	{ "SHL22", "Linux version 3.4.0 (nbproj@TGX33001) (gcc version 4.6.x-google 20120106 (prerelease) (GCC) ) #2 SMP PREEMPT Wed Oct 7 00:53:44 JST 2015",
+	  { (void*)FSYNC_OFFSET(0xc0f381c8) },
+	  NULL, NULL, NULL, NULL },
 };
 
 #endif /* (__LP64__) */
@@ -420,6 +427,36 @@ struct offsets offsets[] = {
 #define DEVNAME_LEN 64
 #define KERNELVER_LEN 256
 
+ssize_t getline(char **lineptr, size_t *n, FILE *stream)
+{
+	char *result;
+	char *newptr;
+	size_t old_n;
+
+	if (n == NULL || lineptr == NULL)
+		return EINVAL;
+
+	result = fgets(*lineptr, *n, stream);
+	
+	if (result == NULL)
+		return -1;
+
+	if (strchr(*lineptr, '\n') == NULL)
+	{
+		old_n = *n;
+		*n = old_n * 3 / 2;
+		newptr = realloc(*lineptr, *n);
+		if (newptr == NULL)
+			return -1;
+		free(*lineptr);
+		*lineptr = newptr;
+		*n = *n - old_n + 1;
+		return getline(lineptr + old_n - 1, n, stream)	+ old_n - 1;
+	}
+
+	return strlen(*lineptr);
+
+}
 static char* get_devname(char* name)
 {
 	FILE* f;
