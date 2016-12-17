@@ -19,6 +19,9 @@ struct mmsghdr {
 	unsigned int msg_len;
 };
 
+#include <stdbool.h>
+#include "iovy.h"
+
 #define UDP_SERVER_PORT (5105)
 #define MEMMAGIC (0xDEADBEEF)
 //pipe buffers are seperated in pages
