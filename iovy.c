@@ -13,6 +13,7 @@
 #include <sys/resource.h>
 
 #include <sys/socket.h>
+#include <fcntl.h>
 #define F_SETPIPE_SZ (F_LINUX_SPECIFIC_BASE + 7)
 struct mmsghdr {
 	struct msghdr msg_hdr;
@@ -284,7 +285,7 @@ static int write_at_address(void* target, unsigned long targetval)
 }
 
 bool iovy_run_exploit(unsigned long address, int value,
-	bool(*explit_callback)(void* user_data), void *user_data)
+	bool(*exploit_callback)(void* user_data), void *user_data)
 {
 	printf("iovyroot by zxz0O0\n");
 	printf("poc by idler1984\n\n");
